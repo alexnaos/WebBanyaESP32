@@ -1,18 +1,17 @@
 #include <Arduino.h>
-#include "secrets.h" // Подключаем наши секреты
 #include <WiFi.h>
 #include <Wire.h>
 #include <Adafruit_BMP280.h>
 #include <PubSubClient.h>
 
-// Теперь используем макросы вместо открытого текста:
-const char *ssid = WIFI_SSID;
-const char *password = WIFI_PASS;
-const char *mqtt_user = MQTT_USER;
-const char *mqtt_pass = MQTT_PASS;
-const char *mqtt_server = MQTT_HOST;
+// --- Настройки ---
+const char *ssid = "Sloboda100";
+const char *password = "2716192023";
+const char *mqtt_server = "192.168.1.23"; // IP твоего малинки/компа с MQTT
+const char *mqtt_user = "admin";
+const char *mqtt_pass = "2716192023";
+const char *client_id = "ESP32_Sloboda"; // уникальное имя клиента
 
-const char *client_id = "ESP32_Sloboda";                      // уникальное имя клиента
 const char *status_topic = "home/ESP32_Sloboda/status";       // Топик для статуса
 const char *will_msg = "offline";                             // Предсмертная записка
 const int will_qos = 1;                                       // Качество доставки
@@ -31,22 +30,17 @@ void callback(char *topic, byte *payload, unsigned int length)
   for (int i = 0; i < length; i++)
     msg += (char)payload[i];
 
-  Serial.print("Message arrived [");
-  Serial.print(topic);
-  Serial.print("] Payload: ");
-  Serial.println(msg); // Увидим, что пришло на самом деле
-
   if (String(topic) == led_set_topic)
   {
     if (msg == "ON")
     {
       digitalWrite(2, HIGH);
-      client.publish(led_state_topic, "ON", true);
+      client.publish(led_state_topic, "ON", true); // Подтверждаем включение с флагом Retain
     }
     else if (msg == "OFF")
     {
       digitalWrite(2, LOW);
-      client.publish(led_state_topic, "OFF", true);
+      client.publish(led_state_topic, "OFF", true); // Подтверждаем выключение
     }
   }
 }
@@ -86,7 +80,7 @@ void reconnect()
     // connect(id, user, pass, willTopic, willQos, willRetain, willMessage)
     if (client.connect(client_id, mqtt_user, mqtt_pass, status_topic, will_qos, will_retain, will_msg))
     {
-      client.subscribe(led_set_topic);
+      client.subscribe("home/ESP32_Sloboda/led"); // Подписываемся на команды
       client.publish(status_topic, "online", true);
       Serial.println("connected");
 
