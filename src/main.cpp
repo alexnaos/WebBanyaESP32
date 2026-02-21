@@ -25,10 +25,10 @@ const char *led_state_topic = "home/ESP32_Sloboda/led/state"; // Для стат
 // Новый топик для слайдера
 const char *mosfet_set_topic = "home/ESP32_Sloboda/mosfet/set";
 const int ledPin = 2;    // Пин для ВКЛ/ВЫКЛ
-const int mosfetPin = 4; // Пин для мосфета (ШИМ)
+const int mosfetPin = 12; // Пин для мосфета (ШИМ)
 
 // Параметры ШИМ
-const int freq = 5000;
+const int freq = 15000;
 const int pwmChannel = 0;
 const int resolution = 8; // 0-255
 
