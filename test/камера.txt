@@ -1,0 +1,37 @@
+<div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+   <img src="http://192.168.1.43:8080/video"
+         style="width: 100%; height: auto; object-fit: contain;">
+</div>
+
+
+ExecStart=/usr/bin/python3 /usr/local/lib/python3.8/dist-packages/motioneye/meyectl.py startserver -c /etc/motioneye/motioneye.conf
+
+/usr/local/lib/python3.8/dist-packages/motioneye/__init__.py
+
+# Вставьте путь до папки motioneye, полученный выше (без __init__.py)
+sudo find /usr/local/lib/python3.8/dist-packages/motioneye/ -name "*.py" -exec sed -i 's/\bxrange\b/range/g' {} +
+
+
+
+---------- Install::runWithAdminRights ----------
+ *    Ok > Install::stopCore
+Created symlink /etc/systemd/system/multi-user.target.wants/XeomaCoreService.service → /etc/systemd/system/XeomaCoreService.service.
+ *    Ok > UnicodeString&, const FS::UnicodeString&)
+ *    Ok > exchangeOldExeFileToNew
+ *    Ok > UnicodeString&, const FS::UnicodeString&, bool*)
+ *    Ok > UnicodeString&, const FS::UnicodeString&)
+ *    Ok > UnicodeString&, const FS::UnicodeString&)
+------------------------------------
+ *    Ok > Install::runWithAdminRights
+ *    Ok > Install::removeOldExe
+ *    Ok > Install::installCoreAutostartOnly
+
+Settings path: /usr/local/Xeoma
+Executable file's path: /home/orangepi/bin/Xeoma/xeoma
+
+Ok
+
+
+Current password for network access: rfGbnhh48J
+
+

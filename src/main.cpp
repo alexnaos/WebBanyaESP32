@@ -5,6 +5,9 @@
 #include <Adafruit_BMP280.h>
 #include <PubSubClient.h>
 #include <GyverDS18.h>
+#include <ArduinoJson.h> // Нужно установить через Менеджер библиотек
+
+const char *cmd_topic = "home/ESP32_Sloboda/cmd"; // Топик для JSON сценариев
 
 uint64_t addr = 0x6A000000BC84BF28;
 
@@ -14,6 +17,10 @@ const char *password = WIFI_PASS;
 const char *mqtt_user = MQTT_USER;
 const char *mqtt_pass = MQTT_PASS;
 const char *mqtt_server = MQTT_HOST;
+IPAddress local_IP(192, 168, 1, 104); // Желаемый IP
+IPAddress gateway(192, 168, 1, 1);    // IP роутера
+IPAddress subnet(255, 255, 255, 0);   // Маска подсети
+IPAddress dns(8, 8, 8, 8);            // DNS (например, Google)
 
 const char *client_id = "ESP32_Sloboda";                      // уникальное имя клиента
 const char *status_topic = "home/ESP32_Sloboda/status";       // Топик для статуса
@@ -24,7 +31,7 @@ const char *led_set_topic = "home/ESP32_Sloboda/led/set";     // Для кома
 const char *led_state_topic = "home/ESP32_Sloboda/led/state"; // Для статуса
 // Новый топик для слайдера
 const char *mosfet_set_topic = "home/ESP32_Sloboda/mosfet/set";
-const int ledPin = 2;    // Пин для ВКЛ/ВЫКЛ
+const int ledPin = 2;     // Пин для ВКЛ/ВЫКЛ
 const int mosfetPin = 12; // Пин для мосфета (ШИМ)
 
 // Параметры ШИМ
@@ -38,30 +45,51 @@ PubSubClient client(espClient);
 Adafruit_BMP280 bmp;
 GyverDS18 ds(14); // пин
 
-void callback(char *topic, byte *payload, unsigned int length) {
-  // Создаем временную строку для обработки данных
+
+void callback(char *topic, byte *payload, unsigned int length)
+{
+  // --- Оставляем вашу старую логику для обычных топиков ---
   char msg[length + 1];
   memcpy(msg, payload, length);
   msg[length] = '\0';
 
-  // 1. Управление обычным пином (ON/OFF)
   if (strcmp(topic, led_set_topic) == 0) {
     if (strcmp(msg, "ON") == 0) digitalWrite(ledPin, HIGH);
     else if (strcmp(msg, "OFF") == 0) digitalWrite(ledPin, LOW);
     client.publish(led_state_topic, msg, true);
+    return; // Выходим, если это был обычный топик
   }
 
-  // 2. Управление мосфетом через слайдер (0-255)
-  if (strcmp(topic, mosfet_set_topic) == 0) {
-    int brightness = atoi(msg); // Конвертируем текст в число
-    if (brightness < 0) brightness = 0;
-    if (brightness > 255) brightness = 255;
+  // --- НОВАЯ ЛОГИКА ДЛЯ JSON ---
+  if (strcmp(topic, cmd_topic) == 0) {
+    StaticJsonDocument<256> doc; // Резервируем память под JSON
+    DeserializationError error = deserializeJson(doc, payload, length);
+
+    if (error) {
+      Serial.print("JSON Error: ");
+      Serial.println(error.c_str());
+      return;
+    }
+
+    // Пример выполнения сценария: {"led": 1, "mosfet": 128}
     
-    ledcWrite(pwmChannel, brightness);
-    // Опционально: подтверждаем получение значения
-    // client.publish("home/ESP32_Sloboda/mosfet/state", msg, true);
+    // 1. Управление LED
+    if (doc.containsKey("led")) {
+      int state = doc["led"]; // Примет 0 или 1
+      digitalWrite(ledPin, state);
+      client.publish(led_state_topic, state ? "ON" : "OFF", true);
+    }
+
+    // 2. Управление мосфетом
+    if (doc.containsKey("mosfet")) {
+      int val = doc["mosfet"]; // Примет значение 0-255
+      if (val >= 0 && val <= 255) {
+        ledcWrite(pwmChannel, val);
+      }
+    }
   }
 }
+
 
 
 void setup()
@@ -87,12 +115,27 @@ void setup()
 
   // Пока ESP32 подключается к WiFi (это занимает 2-5 секунд),
   // датчик DS18B20 успеет спокойно провести измерение.
+  WiFi.setAutoReconnect(true);
+  WiFi.persistent(true);
+
+  // 2. Настройка статики
+  if (!WiFi.config(local_IP, gateway, subnet, dns))
+  {
+    Serial.println("STA Failed to configure");
+  }
+
   WiFi.begin(ssid, password);
+
   while (WiFi.status() != WL_CONNECTED)
   {
     delay(500);
     Serial.print(".");
   }
+
+  Serial.println("");
+  Serial.println("WiFi connected");
+  Serial.print("IP address: ");
+  Serial.println(WiFi.localIP()); // Проверьте, что выдал именно 150
 
   // Теперь, когда прошло время, можно прочитать данные в Serial
   if (ds.readTemp(addr))
@@ -124,6 +167,8 @@ void reconnect()
         client.subscribe(led_set_topic);
         client.publish(status_topic, "online", true);
         client.subscribe(mosfet_set_topic);
+        client.subscribe(cmd_topic);
+
       }
     }
   }
