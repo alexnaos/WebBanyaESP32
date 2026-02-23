@@ -5,9 +5,12 @@
 #include <Adafruit_BMP280.h>
 #include <PubSubClient.h>
 #include <GyverDS18.h>
-#include <ArduinoJson.h>                          // Нужно установить через Менеджер библиотек
+#include <ArduinoJson.h> // Нужно установить через Менеджер библиотек
+
 const char *cmd_topic = "home/ESP32_Sloboda/cmd"; // Топик для JSON сценариев
+
 uint64_t addr = 0x6A000000BC84BF28;
+
 // Теперь используем макросы вместо открытого текста:
 const char *ssid = WIFI_SSID;
 const char *password = WIFI_PASS;
@@ -41,6 +44,7 @@ float last_t = 0, last_p = 0, last_tdls = 0;
 bool led_status = false;
 int mosfet_value = 0;
 
+
 WiFiServer server(80);
 WiFiClient espClient;
 PubSubClient client(espClient);
@@ -49,7 +53,7 @@ GyverDS18 ds(14); // пин
 
 void callback(char *topic, byte *payload, unsigned int length)
 {
-  // 1. Подготовка сообщения
+  // Резервируем место для текстового сообщения (старый метод)
   char msg[length + 1];
   memcpy(msg, payload, length);
   msg[length] = '\0';
@@ -59,7 +63,7 @@ void callback(char *topic, byte *payload, unsigned int length)
   Serial.print("] ");
   Serial.println(msg);
 
-  // --- ЛОГИКА ДЛЯ JSON (Команда cmd) ---
+  // --- ЛОГИКА ДЛЯ JSON (НОВАЯ) ---
   if (strcmp(topic, cmd_topic) == 0)
   {
     StaticJsonDocument<256> doc;
@@ -72,52 +76,43 @@ void callback(char *topic, byte *payload, unsigned int length)
       return;
     }
 
-    // 1. Обработка LED из JSON
+    // Пример выполнения: {"led": 1, "mosfet": 150}
     if (doc.containsKey("led"))
     {
-      int state = doc["led"]; // 1 или 0
+      int state = doc["led"];
       digitalWrite(ledPin, state ? HIGH : LOW);
-
-      // Отправляем подтверждение в MQTT статус-топик
       client.publish(led_state_topic, state ? "ON" : "OFF", true);
     }
 
-    // 2. Обработка MOSFET из JSON
     if (doc.containsKey("mosfet"))
     {
       int val = doc["mosfet"];
-
-      // Ограничиваем значение (300 превратится в 255)
-      mosfet_value = constrain(val, 0, 255);
-
-      ledcWrite(pwmChannel, mosfet_value);
-
-      // Опционально: отправляем подтверждение в топик состояния мосфета
-      char buf[5];
-      itoa(mosfet_value, buf, 10);
-      client.publish("home/ESP32_Sloboda/mosfet/state", buf, true);
+      if (val >= 0 && val <= 255)
+      {
+        ledcWrite(pwmChannel, val);
+      }
     }
-
-    Serial.println("Command applied: LED and MOSFET updated");
-    return;
+    return; // Выходим, так как это был JSON пакет
   }
 
-  // --- ЛОГИКА ДЛЯ ОТДЕЛЬНЫХ ТОПИКОВ (Текстовая) ---
+  // --- ВАША СТАРАЯ ЛОГИКА (БЕЗ ИЗМЕНЕНИЙ) ---
   if (strcmp(topic, led_set_topic) == 0)
   {
     if (strcmp(msg, "ON") == 0)
       digitalWrite(ledPin, HIGH);
     else if (strcmp(msg, "OFF") == 0)
       digitalWrite(ledPin, LOW);
-
     client.publish(led_state_topic, msg, true);
   }
 
   if (strcmp(topic, mosfet_set_topic) == 0)
   {
-    mosfet_value = atoi(msg); // ОБЯЗАТЕЛЬНО обновляем переменную для веб-страницы
-    mosfet_value = constrain(mosfet_value, 0, 255);
-    ledcWrite(pwmChannel, mosfet_value);
+    int brightness = atoi(msg);
+    if (brightness < 0)
+      brightness = 0;
+    if (brightness > 255)
+      brightness = 255;
+    ledcWrite(pwmChannel, brightness);
   }
 }
 
@@ -208,76 +203,42 @@ void loop()
 {
   reconnect();
   client.loop();
-
-  // --- ОБРАБОТКА ВЕБ-СЕРВЕРА (Мониторинг) ---
-  WiFiClient webClient = server.available();
-  if (webClient)
-  {
-    String currentLine = "";
-    unsigned long timeout = millis() + 2000;
-    while (webClient.connected() && millis() < timeout)
-    {
-      if (webClient.available())
-      {
-        char c = webClient.read();
-        if (c == '\n')
-        {
-          if (currentLine.length() == 0)
-          {
-            webClient.println("HTTP/1.1 200 OK");
-            webClient.println("Content-type:text/html");
-            webClient.println();
-            webClient.println("<html><head><meta charset='UTF-8'><meta http-equiv='refresh' content='3'></head>");
-            webClient.println("<body style='font-family:sans-serif; text-align:center;'>");
-            webClient.println("<h1>ESP32 Status (from Orange)</h1>");
-
-            // Показываем текущее состояние пинов (то, что пришло по MQTT)
-            webClient.print("<p><b>LED Status:</b> ");
-            webClient.println(digitalRead(ledPin) ? "<span style='color:green'>ON</span>" : "<span style='color:red'>OFF</span>");
-            webClient.println("</p><p><b>Mosfet Level:</b> ");
-            webClient.println(mosfet_value); // Значение из переменной, обновленной в callback
-
-            webClient.println("</p><hr><p>Temp BMP: " + String(last_t) + " °C</p>");
-            webClient.println("<p>Temp DS18: " + String(last_tdls) + " °C</p>");
-            webClient.println("<p>Pressure: " + String(last_p) + " hPa</p>");
-            webClient.println("</body></html>");
-            break;
-          }
-          else
-          {
-            currentLine = "";
-          }
-        }
-        else if (c != '\r')
-        {
-          currentLine += c;
-        }
-      }
-    }
-    webClient.stop();
-  }
-
-  // --- ОТПРАВКА MQTT (Сенсоры) ---
   unsigned long now = millis();
+
+  // 1. Считываем данные и отправляем их (раз в 5 секунд)
   if (now - lastMsg > 5000)
   {
     lastMsg = now;
-    last_t = bmp.readTemperature();
-    last_p = bmp.readPressure() / 100.0F;
+
+    // К этому моменту прошло 5 секунд с прошлого запроса, данные ТОЧНО готовы
+    float t = bmp.readTemperature();
+    float p = bmp.readPressure() / 100.0F;
+
+    // Читаем данные, которые запрашивали 5 секунд назад
+    float tdls = -127;
     if (ds.readTemp(addr))
-      last_tdls = ds.getTemp();
+    { // Используем ваш адрес addr из начала скетча
+      tdls = ds.getTemp();
+    }
 
     char buf[10];
-    dtostrf(last_t, 4, 2, buf);
+    dtostrf(t, 4, 2, buf);
     client.publish("home/ESP32_Sloboda/temp", buf);
-    dtostrf(last_p, 4, 2, buf);
+
+    dtostrf(p, 4, 2, buf);
     client.publish("home/ESP32_Sloboda/press", buf);
 
-    if (last_tdls != -127.00)
+    if (tdls != -127)
     {
-      dtostrf(last_tdls, 4, 2, buf);
+      dtostrf(tdls, 4, 2, buf);
       client.publish("home/ESP32_Sloboda/tempDLS", buf);
+      Serial.print("DS18B20 Temp: ");
+      Serial.println(tdls);
     }
+
+    // 2. СРАЗУ запрашиваем новое измерение для СЛЕДУЮЩЕГО цикла (через 5 сек)
     ds.requestTemp();
   }
+
+  // Веб-сервер...
 }
