@@ -5,7 +5,12 @@
 #include <Adafruit_BMP280.h>
 #include <PubSubClient.h>
 #include <GyverDS18.h>
-#include <ArduinoJson.h>                          // Нужно установить через Менеджер библиотек
+#include <ArduinoJson.h>
+#include "BluetoothSerial.h"
+
+BluetoothSerial SerialBT;
+
+// Нужно установить через Менеджер библиотек
 const char *cmd_topic = "home/ESP32_Sloboda/cmd"; // Топик для JSON сценариев
 uint64_t addr = 0x6A000000BC84BF28;
 // Теперь используем макросы вместо открытого текста:
@@ -135,6 +140,9 @@ void setup()
   ds.requestTemp();
   Serial.println("DS18B20: Запрос температуры...");
 
+  SerialBT.begin("ESP32_Wemos_D1");
+  Serial.println("Устройство готово к сопряжению!");
+
   Wire.begin(21, 22);
   if (!bmp.begin(0x76))
   {
@@ -208,6 +216,17 @@ void loop()
 {
   reconnect();
   client.loop();
+
+  if (SerialBT.available())
+  {
+    Serial.write(SerialBT.read());
+  }
+  // Пересылка данных из монитора порта в Bluetooth
+  if (Serial.available())
+  {
+    SerialBT.write(Serial.read());
+  }
+  delay(20);
 
   // --- ОБРАБОТКА ВЕБ-СЕРВЕРА (Мониторинг) ---
   WiFiClient webClient = server.available();
