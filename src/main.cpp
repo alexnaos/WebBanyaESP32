@@ -5,7 +5,12 @@
 #include <Adafruit_BMP280.h>
 #include <PubSubClient.h>
 #include <GyverDS18.h>
-#include <ArduinoJson.h>                          // Нужно установить через Менеджер библиотек
+#include <ArduinoJson.h>
+#include "BluetoothSerial.h"
+
+BluetoothSerial SerialBT;
+
+// Нужно установить через Менеджер библиотек
 const char *cmd_topic = "home/ESP32_Sloboda/cmd"; // Топик для JSON сценариев
 uint64_t addr = 0x6A000000BC84BF28;
 // Теперь используем макросы вместо открытого текста:
@@ -14,20 +19,21 @@ const char *password = WIFI_PASS;
 const char *mqtt_user = MQTT_USER;
 const char *mqtt_pass = MQTT_PASS;
 const char *mqtt_server = MQTT_HOST;
-IPAddress local_IP(192, 168, 1, 104); // Желаемый IP
+// IPAddress local_IP(192, 168, 1, 104); // Желаемый
+IPAddress local_IP(192, 168, 1, 115); // Желаемый для маленькой платы
 IPAddress gateway(192, 168, 1, 1);    // IP роутера
 IPAddress subnet(255, 255, 255, 0);   // Маска подсети
 IPAddress dns(8, 8, 8, 8);            // DNS (например, Google)
 
-const char *client_id = "ESP32_Sloboda";                      // уникальное имя клиента
-const char *status_topic = "home/ESP32_Sloboda/status";       // Топик для статуса
+const char *client_id = "ESP32 Malek";                      // уникальное имя клиента
+const char *status_topic = "home/ESP32 Malek/status";       // Топик для статуса
 const char *will_msg = "offline";                             // Предсмертная записка
 const int will_qos = 1;                                       // Качество доставки
 const bool will_retain = true;                                // Брокер запомнит статус
-const char *led_set_topic = "home/ESP32_Sloboda/led/set";     // Для команд
-const char *led_state_topic = "home/ESP32_Sloboda/led/state"; // Для статуса
+const char *led_set_topic = "home/ESP32 Malek/led/set";     // Для команд
+const char *led_state_topic = "home/ESP32 Malek/led/state"; // Для статуса
 // Новый топик для слайдера
-const char *mosfet_set_topic = "home/ESP32_Sloboda/mosfet/set";
+const char *mosfet_set_topic = "home/ESP32 Malek/mosfet/set";
 const int ledPin = 2;     // Пин для ВКЛ/ВЫКЛ
 const int mosfetPin = 12; // Пин для мосфета (ШИМ)
 
@@ -95,7 +101,7 @@ void callback(char *topic, byte *payload, unsigned int length)
       // Опционально: отправляем подтверждение в топик состояния мосфета
       char buf[5];
       itoa(mosfet_value, buf, 10);
-      client.publish("home/ESP32_Sloboda/mosfet/state", buf, true);
+      client.publish("home/ESP32 Malek/mosfet/state", buf, true);
     }
 
     Serial.println("Command applied: LED and MOSFET updated");
@@ -128,12 +134,13 @@ void setup()
   pinMode(ledPin, OUTPUT);
   ledcSetup(pwmChannel, freq, resolution);
   ledcAttachPin(mosfetPin, pwmChannel);
-
   client.setCallback(callback);
-
   // Инициализация датчика
   ds.requestTemp();
   Serial.println("DS18B20: Запрос температуры...");
+
+  SerialBT.begin("ESP32_Wemos_D1");
+  Serial.println("Устройство готово к сопряжению!");
 
   Wire.begin(21, 22);
   if (!bmp.begin(0x76))
@@ -269,14 +276,14 @@ void loop()
 
     char buf[10];
     dtostrf(last_t, 4, 2, buf);
-    client.publish("home/ESP32_Sloboda/temp", buf);
+    client.publish("home/ESP32 Malek/temp", buf);
     dtostrf(last_p, 4, 2, buf);
-    client.publish("home/ESP32_Sloboda/press", buf);
+    client.publish("home/ESP32 Malek/press", buf);
 
     if (last_tdls != -127.00)
     {
       dtostrf(last_tdls, 4, 2, buf);
-      client.publish("home/ESP32_Sloboda/tempDLS", buf);
+      client.publish("home/ESP32 Malek/tempDLS", buf);
     }
     ds.requestTemp();
   }
