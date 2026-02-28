@@ -1,5 +1,5 @@
 #include <WiFi.h>
-#include <WebServer.h> // Добавили стандартный сервер
+#include <WebServer.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
 #include "config.h"
@@ -9,9 +9,8 @@ WebServer server(80);
 WiFiClient espClient;
 PubSubClient client(espClient);
 
-// Переменные для хранения текущего состояния (для веб-морды)
 bool currentLed = false;
-int currentMosfet = 0;
+int currentMosfet = 1;
 
 void handleRoot() {
     server.send(200, "text/html", INDEX_HTML);
@@ -26,7 +25,7 @@ void handleData() {
     server.send(200, "application/json", json);
 }
 
-void callback(char* topic, byte* payload, unsigned int length) {
+void callback(char *topic, byte *payload, unsigned int length) {
     char msg[length + 1];
     memcpy(msg, payload, length);
     msg[length] = '\0';
@@ -56,10 +55,9 @@ void callback(char* topic, byte* payload, unsigned int length) {
     }
 }
 
-// ... Функция reconnect остается такой же как в прошлом ответе ...
 void reconnect() {
     static unsigned long lastAttempt = 0;
-    if (!client.connected() && millis() - lastAttempt > 5000) {
+    if (!client.connected() && (millis() - lastAttempt > 5000)) {
         lastAttempt = millis();
         if (client.connect(CLIENT_ID, mqtt_user, mqtt_pass, TOPIC_STATUS, 1, true, "offline")) {
             client.publish(TOPIC_STATUS, "online", true);
@@ -70,7 +68,6 @@ void reconnect() {
     }
 }
 
-
 void setup() {
     pinMode(LED_PIN, OUTPUT);
     ledcSetup(PWM_CHANNEL, PWM_FREQ, PWM_RES);
@@ -78,9 +75,10 @@ void setup() {
 
     WiFi.config(local_IP, gateway, subnet, dns);
     WiFi.begin(ssid, password);
-    while (WiFi.status() != WL_CONNECTED) delay(500);
+    while (WiFi.status() != WL_CONNECTED) {
+        delay(500);
+    }
 
-    // Настройка веб-сервера
     server.on("/", handleRoot);
     server.on("/data", handleData);
     server.begin();
@@ -90,7 +88,9 @@ void setup() {
 }
 
 void loop() {
-    if (!client.connected()) reconnect();
+    if (!client.connected()) {
+        reconnect();
+    }
     client.loop();
-    server.handleClient(); // Обработка веб-запросов
+    server.handleClient();
 }

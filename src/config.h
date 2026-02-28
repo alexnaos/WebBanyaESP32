@@ -15,10 +15,13 @@ const IPAddress subnet(255, 255, 255, 0);
 const IPAddress dns(8, 8, 8, 8);
 
 // Пины
-const int LED_PIN = 3; // 4снизу справа!
+const int LED_PIN = 22; 
+// читаем по плате!!!! 16,17,21,22,26 инвертирован. 
+//левая сторона 018-035 не трог., 019, 023, 05 инверт
+
 //const int MOSFET_PIN = 3; // 4снизу справа!
-//const int MOSFET_PIN = 4; // 5снизу справа нет сигнала
-const int MOSFET_PIN = 25;
+const int MOSFET_PIN = 16; // 5снизу справа нет сигнала
+//const int MOSFET_PIN = 25;
 
 
 
