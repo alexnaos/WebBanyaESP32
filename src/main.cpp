@@ -78,7 +78,6 @@ void setup() {
     while (WiFi.status() != WL_CONNECTED) {
         delay(500);
     }
-
     server.on("/", handleRoot);
     server.on("/data", handleData);
     server.begin();
